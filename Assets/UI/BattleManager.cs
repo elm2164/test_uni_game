@@ -2,13 +2,13 @@ using UnityEngine;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.InputSystem;
+using UnityEngine.InputSystem; // 🌟 既存の参照を完全に維持
 
 public class BattleManager : MonoBehaviour
 {
     [Header("--- 共通パネル・システム ---")]
     [SerializeField] private GameObject panelLogWindow;
-    [SerializeField] private TextAsset jsonFile; // ★cursorTextへの参照を削除！
+    [SerializeField] private TextAsset jsonFile;
 
     [Header("--- 使い回す万能メニューウインドウ ---")]
     [SerializeField] private MenuWindow generalMenuWindow;
@@ -20,12 +20,15 @@ public class BattleManager : MonoBehaviour
     private List<MonsterData> enemies = new List<MonsterData>();
     private Dictionary<string, MonsterData> monsterDictionary;
 
+    // 🌟 完全版の BattlePhase 列挙型と一致
     enum BattlePhase
     {
         MainMenuSelect,
         BattleMenuSelect,
         TargetSelect,
-        EventProcessing
+        EventProcessing,
+        Victory,
+        Defeat
     }
     BattlePhase currentPhase = BattlePhase.MainMenuSelect;
 
@@ -45,12 +48,10 @@ public class BattleManager : MonoBehaviour
 
     void Start()
     {
-        // 💡 外部から呼ばれていない（単体テストプレイ時）なら、隔離したTestクラスからデータを貰う
         if (!isInitializedExternally)
         {
             monsterDictionary = BattleInitializer.LoadMonsterDictionary(jsonFile);
 
-            // ★ MyGame.Test. を消去し、スッキリしたグローバルなBattleクラスを呼び出す
             var testPlayers = Battle.CreateTestPlayers(monsterDictionary);
             var testEnemies = Battle.CreateTestEnemies(monsterDictionary);
 
@@ -65,17 +66,19 @@ public class BattleManager : MonoBehaviour
         ChangePhase(BattlePhase.MainMenuSelect);
     }
 
+    // 🌟 修正・完全版の ChangePhase メソッド
     void ChangePhase(BattlePhase nextPhase)
     {
         currentPhase = nextPhase;
 
+        // フェーズ切り替え時は、常に一度メニューウィンドウを閉じる
         generalMenuWindow.Close();
         panelLogWindow.SetActive(false);
-        // ★「cursorText.gameObject.SetActive(true)」のようなカーソル制御を削除！
 
         switch (currentPhase)
         {
             case BattlePhase.MainMenuSelect:
+                // 全体のコマンド選択なので、タイトル引数は無し（空文字）
                 generalMenuWindow.CreateMenu(
                     new List<string> { "たたかう", "どうぐ", "スカウト", "にげる" },
                     0f, 0f,
@@ -84,15 +87,22 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case BattlePhase.BattleMenuSelect:
+                // 現在のプレイヤー名をタイトル引数としてMenuWindowに渡す
+                string pName = (currentPlayerIndex < players.Count) ? players[currentPlayerIndex].monsterName : "";
+
                 generalMenuWindow.CreateMenu(
                     new List<string> { "こうげき", "スキル", "ぼうぎょ", "もどる" },
                     0f, 0f,
                     OnBattleMenuConfirmed,
-                    OnBattleMenuCanceled
+                    OnBattleMenuCanceled,
+                    pName // 🌟 タイトル引数
                 );
                 break;
 
             case BattlePhase.TargetSelect:
+                // ターゲット選択中もプレイヤー名を維持するため、同じ名前をタイトル引数に渡す
+                string targetTitle = (currentPlayerIndex < players.Count) ? players[currentPlayerIndex].monsterName : "";
+
                 List<string> targetNames = new List<string>();
                 foreach (var enemy in enemies) targetNames.Add(enemy.monsterName);
                 targetNames.Add("もどる");
@@ -101,12 +111,15 @@ public class BattleManager : MonoBehaviour
                     targetNames,
                     0f, 0f,
                     OnTargetMenuConfirmed,
-                    OnTargetMenuCanceled
+                    OnTargetMenuCanceled,
+                    targetTitle // 🌟 タイトル引数
                 );
                 break;
 
             case BattlePhase.EventProcessing:
+                // メニューウィンドウは閉じた状態で、ログウィンドウのみを有効化
                 panelLogWindow.SetActive(true);
+                StartCoroutine(ExecuteTurnRoutine());
                 break;
         }
     }
@@ -118,7 +131,7 @@ public class BattleManager : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // ★引数から「cursorText」を消し去り、ただ入力を丸投げするだけに！
+        // 🌟 元の正常な入力渡しを完全に維持
         generalMenuWindow.HandleInput(keyboard);
     }
 
@@ -187,12 +200,13 @@ public class BattleManager : MonoBehaviour
         else
         {
             ChangePhase(BattlePhase.EventProcessing);
-            StartCoroutine(ExecuteTurnRoutine());
         }
     }
 
+    // 🌟 修正・完全版の ExecuteTurnRoutine
     IEnumerator ExecuteTurnRoutine()
     {
+        // --- 1. 味方の行動処理 ---
         foreach (var action in chosenActions)
         {
             if (action.user.hp <= 0) continue;
@@ -205,10 +219,8 @@ public class BattleManager : MonoBehaviour
                     else break;
                 }
 
-                int finalDamage = BattleLogic.CalculatePhysicalDamage(action.user, action.targetEnemy);
-
-                logText.text = $"{action.user.monsterName} の攻撃！\n{action.targetEnemy.monsterName}に {finalDamage} のダメージ！";
-                action.targetEnemy.hp -= finalDamage;
+                int damage = 0;
+                logText.text = BattleLogic.ExecutePlayerAttack(action, out damage);
                 yield return new WaitForSeconds(1.5f);
 
                 if (action.targetEnemy.hp <= 0)
@@ -231,6 +243,7 @@ public class BattleManager : MonoBehaviour
             }
         }
 
+        // --- 2. 敵の行動処理 ---
         foreach (var activeEnemy in enemies)
         {
             if (activeEnemy.hp <= 0) continue;
@@ -244,17 +257,14 @@ public class BattleManager : MonoBehaviour
                 if (act.user == targetPlayer && act.command == CommandType.Defend) isTargetDefending = true;
             }
 
-            int finalEnemyDamage = BattleLogic.CalculatePhysicalDamage(activeEnemy, targetPlayer);
-
             if (isTargetDefending)
             {
-                finalEnemyDamage = Mathf.Max(1, finalEnemyDamage / 2);
                 logText.text = $"【{targetPlayer.monsterName}のぼうぎょ成功！】\nダメージを軽減した！";
                 yield return new WaitForSeconds(1.2f);
             }
 
-            logText.text = $"敵の {activeEnemy.monsterName} の攻撃！\n{targetPlayer.monsterName}は {finalEnemyDamage} のダメージ！";
-            targetPlayer.hp -= finalEnemyDamage;
+            int enemyDamage = 0;
+            logText.text = BattleLogic.ExecuteEnemyAttack(activeEnemy, targetPlayer, isTargetDefending, out enemyDamage);
             yield return new WaitForSeconds(1.5f);
 
             if (targetPlayer.hp <= 0)
