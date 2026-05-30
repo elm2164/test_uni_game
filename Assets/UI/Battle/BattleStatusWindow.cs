@@ -25,7 +25,7 @@ public class BattleStatusWindow : MonoBehaviour
   /// 🌟 Battle.CreateTestPlayers(monsterDictionary) で生成された MonsterData のリストを直接受け取ります
   /// </summary>
   /// <param name="players">MonsterData型のプレイヤーリスト</param>
-  public void CreateStatusWindow(List<MonsterData> players, float startPosX, float startPosY)
+  public void CreateStatusWindow(List<BattleMonsterData> players, float startPosX, float startPosY)
   {
     ClearStatus();
 
@@ -37,7 +37,7 @@ public class BattleStatusWindow : MonoBehaviour
 
     for (int i = 0; i < players.Count; i++)
     {
-      MonsterData player = players[i];
+      BattleMonsterData player = players[i];
       if (player == null) continue;
 
       // 1. プレイヤー1人分の背景パネルを生成
@@ -68,8 +68,8 @@ public class BattleStatusWindow : MonoBehaviour
         SetupTextAnchor(nameRect);
         nameRect.anchoredPosition = new Vector2(marginLeftName, -marginTop);
       }
-      // 🌟 MonsterDataクラスのプロパティ（Name）から名前を設定
-      if (nameTmp != null) nameTmp.text = player.Name;
+      // 🌟 BattleMonsterDataクラスのプロパティ（monsterName）から名前を設定
+      if (nameTmp != null) nameTmp.text = player.monsterName;
 
       // 2-b. HP（2行目、名前より右に引っ込める）
       GameObject hpGo = Instantiate(statusTextPrefab, panelGo.transform);
@@ -95,8 +95,8 @@ public class BattleStatusWindow : MonoBehaviour
       TextMeshProUGUI[] statusTexts = new TextMeshProUGUI[2] { hpTmp, mpTmp };
       playerStatusTexts.Add(statusTexts);
 
-      // 🌟 MonsterDataのプロパティ（CurrentHp, MaxHp, CurrentMp, MaxMp）から初期数値を反映
-      UpdatePlayerUI(i, player.CurrentHp, player.MaxHp, player.CurrentMp, player.MaxMp);
+      // 🌟 BattleMonsterDataのプロパティ（currentHp, hp, currentMp, mp）から初期数値を反映
+      UpdatePlayerUI(i, player.currentHp, player.hp, player.currentMp, player.mp);
     }
   }
 
