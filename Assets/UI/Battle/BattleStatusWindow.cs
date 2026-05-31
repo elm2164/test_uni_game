@@ -8,12 +8,19 @@ public class BattleStatusWindow : MonoBehaviour
   [SerializeField] private GameObject statusPanelPrefab; // プレイヤー1人分の背景パネルPrefab
   [SerializeField] private GameObject statusTextPrefab;  // ステータス表示用のテキストPrefab
 
-  [Header("--- 配置の設定 ---")]
-  [SerializeField] private float stepX = 220f;            // パネルを横並びにする際の間隔
-  [SerializeField] private float marginLeftName = 20f;    // 名前の左余白
-  [SerializeField] private float marginLeftStatus = 35f;  // HP/MPの左余白（名前より右にズラすインデント用）
-  [SerializeField] private float marginTop = 15f;         // パネル内での最初の行（名前）の上余白
-  [SerializeField] private float textStepY = 30f;         // 行ごとの縦間隔
+  [Header("--- 配置・マージンの設定 ---")]
+  [SerializeField] private float panelSpaceX = 20f;       // 🌟 初期値を20に設定
+  [SerializeField] private float marginLeftName = 40f;    // 🌟 初期値を40に設定
+  [SerializeField] private float marginLeftStatus = 40f;  // 🌟 初期値を40に設定
+  [SerializeField] private float marginTop = 40f;         // 🌟 初期値を40に設定
+
+  [Header("--- 行間・マージンの設定 ---")]
+  [SerializeField] private float nameToStatusMargin = 80f; // 🌟 初期値を80に設定
+  [SerializeField] private float textStepY = 60f;         // 🌟 初期値を60に設定
+
+  [Header("--- セーフティ（デフォルトサイズ） ---")]
+  [SerializeField] private float defaultPanelWidth = 300f;  // 🌟 初期値を300に設定
+  [SerializeField] private float defaultPanelHeight = 300f; // 🌟 初期値を300に設定
 
   // 生成したパネルのゲームオブジェクトを管理
   private List<GameObject> generatedPanels = new List<GameObject>();
@@ -22,10 +29,9 @@ public class BattleStatusWindow : MonoBehaviour
   private List<TextMeshProUGUI[]> playerStatusTexts = new List<TextMeshProUGUI[]>();
 
   /// <summary>
-  /// 🌟 Battle.CreateTestPlayers(monsterDictionary) で生成された MonsterData のリストを直接受け取ります
+  /// 引数の型を MonsterStatus のリストに適合させ、UIを動的に横並び生成します
   /// </summary>
-  /// <param name="players">MonsterData型のプレイヤーリスト</param>
-  public void CreateStatusWindow(List<BattleMonsterData> players, float startPosX, float startPosY)
+  public void CreateStatusWindow(List<MonsterStatus> players, float startPosX, float startPosY)
   {
     ClearStatus();
 
@@ -35,24 +41,36 @@ public class BattleStatusWindow : MonoBehaviour
       return;
     }
 
+    // 次のパネルを配置するX座標のトラッキング用変数
+    float currentX = startPosX;
+
     for (int i = 0; i < players.Count; i++)
     {
-      BattleMonsterData player = players[i];
+      MonsterStatus player = players[i];
       if (player == null) continue;
 
       // 1. プレイヤー1人分の背景パネルを生成
       GameObject panelGo = Instantiate(statusPanelPrefab, this.transform);
       RectTransform panelRect = panelGo.GetComponent<RectTransform>();
 
+      float targetWidth = defaultPanelWidth;
+
       if (panelRect != null)
       {
-        panelRect.anchorMin = Vector2.zero;
-        panelRect.anchorMax = Vector2.zero;
-        panelRect.pivot = Vector2.zero;
+        targetWidth = panelRect.sizeDelta.x;
+        float targetHeight = panelRect.sizeDelta.y;
 
-        // プレイヤーの人数分、横にスライドして配置
-        float currentX = startPosX + (i * stepX);
-        panelRect.anchoredPosition = new Vector2(currentX, startPosY);
+        if (targetWidth <= 0f) targetWidth = defaultPanelWidth;
+        if (targetHeight <= 0f) targetHeight = defaultPanelHeight;
+
+        panelRect.anchorMin = new Vector2(0f, 1f);
+        panelRect.anchorMax = new Vector2(0f, 1f);
+        panelRect.pivot = new Vector2(0f, 1f);
+
+        panelRect.sizeDelta = new Vector2(targetWidth, targetHeight);
+
+        // 現在蓄積されている currentX をそのまま配置座標として使用
+        panelRect.anchoredPosition = new Vector2(currentX, -startPosY);
       }
 
       generatedPanels.Add(panelGo);
@@ -68,51 +86,51 @@ public class BattleStatusWindow : MonoBehaviour
         SetupTextAnchor(nameRect);
         nameRect.anchoredPosition = new Vector2(marginLeftName, -marginTop);
       }
-      // 🌟 BattleMonsterDataクラスのプロパティ（monsterName）から名前を設定
+
       if (nameTmp != null) nameTmp.text = player.monsterName;
 
-      // 2-b. HP（2行目、名前より右に引っ込める）
+      // 計算用の基準となるY座標（名前の位置から指定マージン分下げる）
+      float hpY = -marginTop - nameToStatusMargin;
+
+      // 2-b. HP（2行目、名前から専用のマージン分空けて配置）
       GameObject hpGo = Instantiate(statusTextPrefab, panelGo.transform);
       RectTransform hpRect = hpGo.GetComponent<RectTransform>();
       TextMeshProUGUI hpTmp = hpGo.GetComponent<TextMeshProUGUI>();
       if (hpRect != null)
       {
         SetupTextAnchor(hpRect);
-        hpRect.anchoredPosition = new Vector2(marginLeftStatus, -marginTop - textStepY);
+        hpRect.anchoredPosition = new Vector2(marginLeftStatus, hpY);
       }
 
-      // 2-c. MP（3行目、名前より右に引っ込める）
+      // 2-c. MP（3行目、HPの位置から通常のtextStepY分下げる）
       GameObject mpGo = Instantiate(statusTextPrefab, panelGo.transform);
       RectTransform mpRect = mpGo.GetComponent<RectTransform>();
       TextMeshProUGUI mpTmp = mpGo.GetComponent<TextMeshProUGUI>();
       if (mpRect != null)
       {
         SetupTextAnchor(mpRect);
-        mpRect.anchoredPosition = new Vector2(marginLeftStatus, -marginTop - (textStepY * 2));
+        mpRect.anchoredPosition = new Vector2(marginLeftStatus, hpY - textStepY);
       }
 
       // 更新用にHPとMPのテキストコンポーネントを記憶
       TextMeshProUGUI[] statusTexts = new TextMeshProUGUI[2] { hpTmp, mpTmp };
       playerStatusTexts.Add(statusTexts);
 
-      // 🌟 BattleMonsterDataのプロパティ（currentHp, hp, currentMp, mp）から初期数値を反映
+      // 初期数値を反映
       UpdatePlayerUI(i, player.currentHp, player.hp, player.currentMp, player.mp);
+
+      // 次のプレイヤーのために、今配置したパネルの横幅 ＋ 指定された隙間分だけX座標を進める
+      currentX += targetWidth + panelSpaceX;
     }
   }
 
-  /// <summary>
-  /// テキストオブジェクトのアンカーを一括で左上に設定する補助メソッド
-  /// </summary>
   private void SetupTextAnchor(RectTransform rect)
   {
     rect.anchorMin = new Vector2(0f, 1f);
-    rect.anchorMax = new Vector2(1f, 1f); // 横幅ストレッチ
+    rect.anchorMax = new Vector2(1f, 1f);
     rect.pivot = new Vector2(0f, 1f);
   }
 
-  /// <summary>
-  /// プレイヤーのインデックスを指定して、HP/MPのテキスト表示をリアルタイム更新します
-  /// </summary>
   public void UpdatePlayerUI(int playerIndex, int currentHp, int maxHp, int currentMp, int maxMp)
   {
     if (playerIndex < 0 || playerIndex >= playerStatusTexts.Count) return;
@@ -123,9 +141,6 @@ public class BattleStatusWindow : MonoBehaviour
     if (texts[1] != null) texts[1].text = $"MP: {currentMp} / {maxMp}";
   }
 
-  /// <summary>
-  /// 生成されているステータスUIをすべて破棄します
-  /// </summary>
   public void ClearStatus()
   {
     foreach (var panel in generatedPanels)

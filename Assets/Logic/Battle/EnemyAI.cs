@@ -3,10 +3,7 @@ using System.Collections.Generic;
 
 public static class EnemyAI
 {
-  /// <summary>
-  /// 生存しているプレイヤーの中からランダムにターゲットを一人選択します
-  /// </summary>
-  public static MonsterData DecideTarget(List<MonsterData> players)
+  public static MonsterStatus DecideTarget(List<MonsterStatus> players)
   {
     if (players == null || players.Count == 0) return null;
 

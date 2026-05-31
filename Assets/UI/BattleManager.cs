@@ -2,25 +2,27 @@ using UnityEngine;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
-using UnityEngine.InputSystem; // 🌟 既存の参照を完全に維持
+using UnityEngine.InputSystem;
 
 public class BattleManager : MonoBehaviour
 {
     [Header("--- 共通パネル・システム ---")]
     [SerializeField] private GameObject panelLogWindow;
-    [SerializeField] private TextAsset jsonFile;
+    [SerializeField] private TextAsset jsonFile; // 単体テストでのみ使用
 
     [Header("--- 使い回す万能メニューウインドウ ---")]
     [SerializeField] private MenuWindow generalMenuWindow;
 
+    [Header("--- ステータス画面の配置システム ---")]
+    [SerializeField] private BattleStatusWindow statusWindow; // 🌟 追加：ステータスUIウィンドウへの参照
+
     [Header("--- テキスト関連 ---")]
     [SerializeField] private TextMeshProUGUI logText;
 
-    private List<MonsterData> players = new List<MonsterData>();
-    private List<MonsterData> enemies = new List<MonsterData>();
-    private Dictionary<string, MonsterData> monsterDictionary;
+    // 🌟 全て MonsterData から MonsterStatus に移行
+    private List<MonsterStatus> players = new List<MonsterStatus>();
+    private List<MonsterStatus> enemies = new List<MonsterStatus>();
 
-    // 🌟 完全版の BattlePhase 列挙型と一致
     enum BattlePhase
     {
         MainMenuSelect,
@@ -36,13 +38,22 @@ public class BattleManager : MonoBehaviour
     private List<PlayerAction> chosenActions = new List<PlayerAction>();
     private bool isInitializedExternally = false;
 
-    public void InitializeBattle(List<MonsterData> inputPlayers, List<MonsterData> inputEnemies)
+    /// <summary>
+    /// 🌟 外部（フィールド画面など）から直接 MonsterStatus の実体リストを貰って戦闘を開始する本番用メソッド
+    /// </summary>
+    public void InitializeBattle(List<MonsterStatus> inputPlayers, List<MonsterStatus> inputEnemies)
     {
-        monsterDictionary = BattleInitializer.LoadMonsterDictionary(jsonFile);
-        players = BattleInitializer.SetupPlayers(inputPlayers);
-        enemies = BattleInitializer.SetupEnemies(inputEnemies);
+        players = inputPlayers;
+        enemies = inputEnemies;
 
         isInitializedExternally = true;
+
+        // 🌟 画面左下にステータスUIを生成配置
+        if (statusWindow != null)
+        {
+            statusWindow.CreateStatusWindow(players, 50f, 50f);
+        }
+
         StartTurnSetup();
     }
 
@@ -50,10 +61,9 @@ public class BattleManager : MonoBehaviour
     {
         if (!isInitializedExternally)
         {
-            monsterDictionary = BattleInitializer.LoadMonsterDictionary(jsonFile);
-
-            var testPlayers = Battle.CreateTestPlayers(monsterDictionary);
-            var testEnemies = Battle.CreateTestEnemies(monsterDictionary);
+            // 🌟 単体テスト時：JSONファイルの読み込みや初期レベルの適用は全て Tests/Battle 側に一任する
+            var testPlayers = Battle.CreateTestPlayers(jsonFile);
+            var testEnemies = Battle.CreateTestEnemies(jsonFile);
 
             InitializeBattle(testPlayers, testEnemies);
         }
@@ -66,19 +76,16 @@ public class BattleManager : MonoBehaviour
         ChangePhase(BattlePhase.MainMenuSelect);
     }
 
-    // 🌟 修正・完全版の ChangePhase メソッド
     void ChangePhase(BattlePhase nextPhase)
     {
         currentPhase = nextPhase;
 
-        // フェーズ切り替え時は、常に一度メニューウィンドウを閉じる
         generalMenuWindow.Close();
         panelLogWindow.SetActive(false);
 
         switch (currentPhase)
         {
             case BattlePhase.MainMenuSelect:
-                // 全体のコマンド選択なので、タイトル引数は無し（空文字）
                 generalMenuWindow.CreateMenu(
                     new List<string> { "たたかう", "どうぐ", "スカウト", "にげる" },
                     0f, 0f,
@@ -87,7 +94,6 @@ public class BattleManager : MonoBehaviour
                 break;
 
             case BattlePhase.BattleMenuSelect:
-                // 現在のプレイヤー名をタイトル引数としてMenuWindowに渡す
                 string pName = (currentPlayerIndex < players.Count) ? players[currentPlayerIndex].monsterName : "";
 
                 generalMenuWindow.CreateMenu(
@@ -95,12 +101,11 @@ public class BattleManager : MonoBehaviour
                     0f, 0f,
                     OnBattleMenuConfirmed,
                     OnBattleMenuCanceled,
-                    pName // 🌟 タイトル引数
+                    pName
                 );
                 break;
 
             case BattlePhase.TargetSelect:
-                // ターゲット選択中もプレイヤー名を維持するため、同じ名前をタイトル引数に渡す
                 string targetTitle = (currentPlayerIndex < players.Count) ? players[currentPlayerIndex].monsterName : "";
 
                 List<string> targetNames = new List<string>();
@@ -112,12 +117,11 @@ public class BattleManager : MonoBehaviour
                     0f, 0f,
                     OnTargetMenuConfirmed,
                     OnTargetMenuCanceled,
-                    targetTitle // 🌟 タイトル引数
+                    targetTitle
                 );
                 break;
 
             case BattlePhase.EventProcessing:
-                // メニューウィンドウは閉じた状態で、ログウィンドウのみを有効化
                 panelLogWindow.SetActive(true);
                 StartCoroutine(ExecuteTurnRoutine());
                 break;
@@ -131,16 +135,12 @@ public class BattleManager : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // 🌟 元の正常な入力渡しを完全に維持
         generalMenuWindow.HandleInput(keyboard);
     }
 
     void OnMainMenuConfirmed(int selection)
     {
-        if (selection == 0)
-        {
-            ChangePhase(BattlePhase.BattleMenuSelect);
-        }
+        if (selection == 0) ChangePhase(BattlePhase.BattleMenuSelect);
     }
 
     void OnBattleMenuConfirmed(int selection)
@@ -186,7 +186,7 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    void SaveAction(CommandType command, MonsterData target)
+    void SaveAction(CommandType command, MonsterStatus target)
     {
         PlayerAction action = new PlayerAction { user = players[currentPlayerIndex], command = command, targetEnemy = target };
         chosenActions.Add(action);
@@ -203,17 +203,16 @@ public class BattleManager : MonoBehaviour
         }
     }
 
-    // 🌟 修正・完全版の ExecuteTurnRoutine
     IEnumerator ExecuteTurnRoutine()
     {
         // --- 1. 味方の行動処理 ---
         foreach (var action in chosenActions)
         {
-            if (action.user.hp <= 0) continue;
+            if (action.user.currentHp <= 0) continue; // currentHpを参照
 
             if (action.command == CommandType.Attack)
             {
-                if (action.targetEnemy.hp <= 0)
+                if (action.targetEnemy.currentHp <= 0)
                 {
                     if (enemies.Count > 0) action.targetEnemy = enemies[0];
                     else break;
@@ -223,7 +222,7 @@ public class BattleManager : MonoBehaviour
                 logText.text = BattleLogic.ExecutePlayerAttack(action, out damage);
                 yield return new WaitForSeconds(1.5f);
 
-                if (action.targetEnemy.hp <= 0)
+                if (action.targetEnemy.currentHp <= 0)
                 {
                     logText.text = $"{action.targetEnemy.monsterName} をたおした！";
                     enemies.Remove(action.targetEnemy);
@@ -244,12 +243,14 @@ public class BattleManager : MonoBehaviour
         }
 
         // --- 2. 敵の行動処理 ---
-        foreach (var activeEnemy in enemies)
+        for (int i = enemies.Count - 1; i >= 0; i--)
         {
-            if (activeEnemy.hp <= 0) continue;
+            var activeEnemy = enemies[i];
+            if (activeEnemy.currentHp <= 0) continue;
             if (players.Count == 0) yield break;
 
-            MonsterData targetPlayer = EnemyAI.DecideTarget(players);
+            MonsterStatus targetPlayer = EnemyAI.DecideTarget(players);
+            int targetPlayerIndex = players.IndexOf(targetPlayer);
 
             bool isTargetDefending = false;
             foreach (var act in chosenActions)
@@ -265,12 +266,22 @@ public class BattleManager : MonoBehaviour
 
             int enemyDamage = 0;
             logText.text = BattleLogic.ExecuteEnemyAttack(activeEnemy, targetPlayer, isTargetDefending, out enemyDamage);
+
+            // 🌟 HPの減少をリアルタイムでステータスUIに反映
+            if (statusWindow != null && targetPlayerIndex >= 0)
+            {
+                statusWindow.UpdatePlayerUI(targetPlayerIndex, targetPlayer.currentHp, targetPlayer.hp, targetPlayer.currentMp, targetPlayer.mp);
+            }
             yield return new WaitForSeconds(1.5f);
 
-            if (targetPlayer.hp <= 0)
+            if (targetPlayer.currentHp <= 0)
             {
                 logText.text = $"{targetPlayer.monsterName} は倒れてしまった！";
                 players.Remove(targetPlayer);
+
+                // プレイヤー死亡時にUIを一度リフレッシュ（またはグレーアウト処理など。ここでは一括再描画クリア）
+                if (statusWindow != null) statusWindow.CreateStatusWindow(players, 50f, 50f);
+
                 yield return new WaitForSeconds(1.2f);
 
                 if (players.Count == 0)

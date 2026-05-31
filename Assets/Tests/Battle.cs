@@ -1,36 +1,56 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-// ★ namespace MyGame.Test の囲みを削除しました！
 public static class Battle
 {
-  public static List<MonsterData> CreateTestPlayers(Dictionary<string, MonsterData> masterData)
+  /// <summary>
+  /// 単体テスト用に、指定されたJSONファイルからMonsterStatusのプレイヤーリストを生成します
+  /// </summary>
+  public static List<MonsterStatus> CreateTestPlayers(TextAsset jsonFile)
   {
-    List<MonsterData> players = new List<MonsterData>();
+    List<MonsterStatus> players = new List<MonsterStatus>();
+    var masterData = BattleInitializer.LoadMonsterDictionary(jsonFile);
 
     if (masterData.ContainsKey("ドラキー"))
     {
-      players.Add(masterData["ドラキー"].MakeMonster());
-      players.Add(masterData["ドラキー"].MakeMonster());
-      players[0].monsterName = "ドラキーA";
-      players[1].monsterName = "ドラキーB";
+      // レベル5のドラキーAとBを生成する例
+      MonsterData baseMonster = masterData["ドラキー"];
+
+      MonsterData p1Master = baseMonster.MakeMonster();
+      p1Master.monsterName = "ドラキーA";
+      players.Add(new MonsterStatus(p1Master, 5));
+
+      MonsterData p2Master = baseMonster.MakeMonster();
+      p2Master.monsterName = "ドラキーB";
+      players.Add(new MonsterStatus(p2Master, 5));
     }
 
     return players;
   }
 
-  public static List<MonsterData> CreateTestEnemies(Dictionary<string, MonsterData> masterData)
+  /// <summary>
+  /// 単体テスト用に、指定されたJSONファイルからMonsterStatusの敵リストを生成します
+  /// </summary>
+  public static List<MonsterStatus> CreateTestEnemies(TextAsset jsonFile)
   {
-    List<MonsterData> enemies = new List<MonsterData>();
+    List<MonsterStatus> enemies = new List<MonsterStatus>();
+    var masterData = BattleInitializer.LoadMonsterDictionary(jsonFile);
 
     if (masterData.ContainsKey("スライム"))
     {
-      enemies.Add(masterData["スライム"].MakeMonster());
-      enemies.Add(masterData["スライム"].MakeMonster());
-      enemies.Add(masterData["スライム"].MakeMonster());
-      enemies[0].monsterName = "スライムA";
-      enemies[1].monsterName = "スライムB";
-      enemies[2].monsterName = "スライムC";
+      MonsterData baseMonster = masterData["スライム"];
+
+      MonsterData e1Master = baseMonster.MakeMonster();
+      e1Master.monsterName = "スライムA";
+      enemies.Add(new MonsterStatus(e1Master, 1));
+
+      MonsterData e2Master = baseMonster.MakeMonster();
+      e2Master.monsterName = "スライムB";
+      enemies.Add(new MonsterStatus(e2Master, 1));
+
+      MonsterData e3Master = baseMonster.MakeMonster();
+      e3Master.monsterName = "スライムC";
+      enemies.Add(new MonsterStatus(e3Master, 1));
     }
 
     return enemies;

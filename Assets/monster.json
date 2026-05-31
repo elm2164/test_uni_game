@@ -3,18 +3,73 @@
     "hp": 100,
     "mp": 50,
     "attack": 20,
-    "defense": 10
+    "defense": 10,
+    "growsHp": [
+      { "level": 1, "rate": 3.5 },
+      { "level": 30, "rate": 1.0 }
+    ],
+    "growsMp": [
+      { "level": 1, "rate": 2.0 },
+      { "level": 30, "rate": 0.5 }
+    ],
+    "growsAttack": [
+      { "level": 1, "rate": 1.0 },
+      { "level": 30, "rate": 0.2 }
+    ],
+    "growsDefense": [
+      { "level": 1, "rate": 0.5 },
+      { "level": 30, "rate": 0.1 }
+    ]
+  },
+  "スライム_boss": {
+    "hp": 500,
+    "mp": 250,
+    "attack": 100,
+    "defense": 50,
+    "isBoss": true
   },
   "ドラキー": {
     "hp": 80,
     "mp": 30,
     "attack": 15,
-    "defense": 5
+    "defense": 5,
+    "growsHp": [
+      { "level": 1, "rate": 3.5 },
+      { "level": 30, "rate": 1.0 }
+    ],
+    "growsMp": [
+      { "level": 1, "rate": 2.0 },
+      { "level": 30, "rate": 0.5 }
+    ],
+    "growsAttack": [
+      { "level": 1, "rate": 1.0 },
+      { "level": 30, "rate": 0.2 }
+    ],
+    "growsDefense": [
+      { "level": 1, "rate": 0.5 },
+      { "level": 30, "rate": 0.1 }
+    ]
   },
   "おおきづち": {
     "hp": 120,
     "mp": 10,
     "attack": 30,
-    "defense": 12
+    "defense": 12,
+    "growsHp": [
+      { "level": 1, "rate": 3.5 },
+      { "level": 30, "rate": 1.0 }
+    ],
+    "growsMp": [
+      { "level": 1, "rate": 2.0 },
+      { "level": 30, "rate": 0.5 }
+    ],
+    "growsAttack": [
+      { "level": 1, "rate": 1.0 },
+      { "level": 30, "rate": 0.2 }
+    ],
+    "growsDefense": [
+      { "level": 1, "rate": 0.5 },
+      { "level": 30, "rate": 0.1 }
+    ]
   }
 }
