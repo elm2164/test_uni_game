@@ -1,63 +1,65 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 [System.Serializable]
 public class MonsterStatus : MonsterData
 {
-  [Header("--- 現在の状態 ---")]
+  [Header("--- 現在の状態（変動値） ---")]
   public int level { get; private set; }
   public int currentHp { get; set; }
   public int currentMp { get; set; }
 
-  public MonsterData masterData { get; private set; }
-
+  /// <summary>
+  /// コンストラクタ：ベースデータの値を自動コピーし、名前の補正および画像名の4桁自動補完を行います
+  /// </summary>
   public MonsterStatus(MonsterData baseData, int initialLevel = 1)
   {
-    this.masterData = baseData;
-    this.isBoss = baseData.isBoss;
+    if (baseData == null) return;
 
-    // 🌟 アンダースコア（_）以降を無視して、純粋なモンスター名だけを抽出する処理
-    if (!string.IsNullOrEmpty(baseData.monsterName))
+    // 1. baseData の全フィールド（id, hp, monsterName, spriteName 等）を自身へ全自動コピー
+    string json = JsonConvert.SerializeObject(baseData);
+    JsonConvert.PopulateObject(json, this);
+
+    // 2. monsterName のアンダースコア（_）以降を削って上書き
+    if (!string.IsNullOrEmpty(this.monsterName))
     {
-      int index = baseData.monsterName.IndexOf('_');
+      int index = this.monsterName.IndexOf('_');
       if (index >= 0)
       {
-        // 「スライム_boss」なら「スライム」の部分だけを切り取る
-        this.monsterName = baseData.monsterName.Substring(0, index);
+        this.monsterName = this.monsterName.Substring(0, index);
       }
-      else
-      {
-        this.monsterName = baseData.monsterName;
-      }
+    }
+
+    // 3. 🌟 spriteName が空（あるいは未指定）の場合、IDを4桁にパディング（例: 1 -> "0001"）して自動補完
+    if (string.IsNullOrEmpty(this.spriteName))
+    {
+      this.spriteName = this.id.ToString("D4");
     }
 
     SetLevel(initialLevel);
 
+    // 現在値の初期化
     this.currentHp = this.hp;
     this.currentMp = this.mp;
   }
 
   /// <summary>
-  /// レベルを変更し、可変成長率リストに基づいてステータスを再計算します
+  /// レベルを変更し、自身の持つ成長率リストに基づいてステータスを再計算します
   /// </summary>
   public void SetLevel(int newLevel)
   {
     this.level = newLevel;
 
-    // 1レベルごとの成長率を毎レベル足し算して計算
-    this.hp = CalculateStatusValue(masterData.hp, masterData.growsHp);
-    this.mp = CalculateStatusValue(masterData.mp, masterData.growsMp);
-    this.attack = CalculateStatusValue(masterData.attack, masterData.growsAttack);
-    this.defense = CalculateStatusValue(masterData.defense, masterData.growsDefense);
+    this.hp = CalculateStatusValue(this.hp, this.growsHp);
+    this.mp = CalculateStatusValue(this.mp, this.growsMp);
+    this.attack = CalculateStatusValue(this.attack, this.growsAttack);
+    this.defense = CalculateStatusValue(this.defense, this.growsDefense);
 
-    // 現在値が最大値を超えないようにクランプ
     if (this.currentHp > this.hp) this.currentHp = this.hp;
     if (this.currentMp > this.mp) this.currentMp = this.mp;
   }
 
-  /// <summary>
-  /// 現在のレベルに到達するまでの成長値を動的に累積計算するメソッド
-  /// </summary>
   private int CalculateStatusValue(int baseValue, List<LevelGrowRate> growList)
   {
     if (growList == null || growList.Count == 0)
@@ -67,7 +69,6 @@ public class MonsterStatus : MonsterData
 
     float totalGrow = 0f;
 
-    // レベル2から現在のレベルまで、1レベル上がるごとの伸び代を計算
     for (int currentLvl = 2; currentLvl <= level; currentLvl++)
     {
       float applicableRate = 0f;

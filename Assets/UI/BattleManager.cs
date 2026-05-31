@@ -2,26 +2,36 @@ using UnityEngine;
 using TMPro;
 using System.Collections;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using UnityEngine.InputSystem;
+using UnityEngine.UI; // 🌟 Imageコンポーネントを扱うために追加
 
 public class BattleManager : MonoBehaviour
 {
     [Header("--- 共通パネル・システム ---")]
     [SerializeField] private GameObject panelLogWindow;
-    [SerializeField] private TextAsset jsonFile; // 単体テストでのみ使用
+    [SerializeField] private TextAsset jsonFile;
 
     [Header("--- 使い回す万能メニューウインドウ ---")]
     [SerializeField] private MenuWindow generalMenuWindow;
 
     [Header("--- ステータス画面の配置システム ---")]
-    [SerializeField] private BattleStatusWindow statusWindow; // 🌟 追加：ステータスUIウィンドウへの参照
+    [SerializeField] private BattleStatusWindow statusWindow;
+
+    [Header("--- 🌟 グラフィック関連の設定 ---")]
+    [SerializeField] private GameObject enemyImagePrefab; // 先ほど作った敵のImageプレハブ
+    [SerializeField] private Transform enemyGroupParent;   // 敵画像をまとめて配置する親（Canvas内の空オブジェクトなど。未指定ならCanvas直下）
+    [SerializeField] private float enemyStepX = 250f;      // 敵が複数並ぶ時の横の間隔
+    [SerializeField] private float enemyCenterY = 100f;     // 敵を表示する画面中央の高さ（Y座標）
 
     [Header("--- テキスト関連 ---")]
     [SerializeField] private TextMeshProUGUI logText;
 
-    // 🌟 全て MonsterData から MonsterStatus に移行
     private List<MonsterStatus> players = new List<MonsterStatus>();
     private List<MonsterStatus> enemies = new List<MonsterStatus>();
+
+    // 🌟 追加：生成した敵のGameObjectをモンスターの実体とペアで管理するための辞書
+    private Dictionary<MonsterStatus, GameObject> enemyGameObjects = new Dictionary<MonsterStatus, GameObject>();
 
     enum BattlePhase
     {
@@ -38,9 +48,6 @@ public class BattleManager : MonoBehaviour
     private List<PlayerAction> chosenActions = new List<PlayerAction>();
     private bool isInitializedExternally = false;
 
-    /// <summary>
-    /// 🌟 外部（フィールド画面など）から直接 MonsterStatus の実体リストを貰って戦闘を開始する本番用メソッド
-    /// </summary>
     public void InitializeBattle(List<MonsterStatus> inputPlayers, List<MonsterStatus> inputEnemies)
     {
         players = inputPlayers;
@@ -48,23 +55,80 @@ public class BattleManager : MonoBehaviour
 
         isInitializedExternally = true;
 
-        // 🌟 画面左下にステータスUIを生成配置
         if (statusWindow != null)
         {
             statusWindow.CreateStatusWindow(players, 50f, 50f);
         }
 
+        // 🌟 追加：敵モンスターのグラフィックを動的に整列生成
+        CreateEnemyGraphics();
+
         StartTurnSetup();
     }
+
+    /// <summary>
+    /// 敵の数に応じて、画面中央に等間隔にグラフィックを生成配置するメソッド
+    /// </summary>
+    private void CreateEnemyGraphics()
+    {
+        // 既存のオブジェクトがあればクリア
+        foreach (var go in enemyGameObjects.Values) { if (go != null) Destroy(go); }
+        enemyGameObjects.Clear();
+
+        if (enemyImagePrefab == null) return;
+
+        int count = enemies.Count;
+        Transform parentTransform = enemyGroupParent != null ? enemyGroupParent : this.transform;
+
+        float startX = -((count - 1) * enemyStepX) / 2f;
+
+        for (int i = 0; i < count; i++)
+        {
+            MonsterStatus enemy = enemies[i];
+
+            GameObject enemyGo = Instantiate(enemyImagePrefab, parentTransform);
+            RectTransform rect = enemyGo.GetComponent<RectTransform>();
+            Image img = enemyGo.GetComponent<Image>();
+
+            if (rect != null)
+            {
+                rect.anchorMin = new Vector2(0.5f, 0.5f);
+                rect.anchorMax = new Vector2(0.5f, 0.5f);
+                rect.pivot = new Vector2(0.5f, 0.5f);
+
+                float posX = startX + (i * enemyStepX);
+                rect.anchoredPosition = new Vector2(posX, enemyCenterY);
+            }
+
+            Debug.Log($"敵 '{enemy.monsterName}' の画像を読み込むための spriteName: '{enemy.spriteName}'"); // 🌟 デバッグログで確認
+            // 🌟 4桁ルールに対応したスマート読み込みロジック
+            if (img != null)
+            {
+                // コンストラクタ側で必ず有効な4桁文字列が入っていることが保証されているため、そのまま渡すだけ
+                Sprite loadedSprite = Resources.Load<Sprite>($"Images/Monster/{enemy.spriteName}");
+                if (loadedSprite != null)
+                {
+                    img.sprite = loadedSprite;
+                }
+                else
+                {
+                    Debug.LogWarning($"Sprite '{enemy.spriteName}' が Resources/Images/Monster/ に見つかりません。ID: {enemy.id}");
+                }
+            }
+
+            enemyGameObjects.Add(enemy, enemyGo);
+        }
+    }
+
 
     void Start()
     {
         if (!isInitializedExternally)
         {
-            // 🌟 単体テスト時：JSONファイルの読み込みや初期レベルの適用は全て Tests/Battle 側に一任する
             var testPlayers = Battle.CreateTestPlayers(jsonFile);
             var testEnemies = Battle.CreateTestEnemies(jsonFile);
-
+            Debug.Log($"テスト用プレイヤー数: {testPlayers.Count}, 敵数: {testEnemies.Count}");
+            Debug.Log(JsonConvert.SerializeObject(testEnemies));
             InitializeBattle(testPlayers, testEnemies);
         }
     }
@@ -208,7 +272,7 @@ public class BattleManager : MonoBehaviour
         // --- 1. 味方の行動処理 ---
         foreach (var action in chosenActions)
         {
-            if (action.user.currentHp <= 0) continue; // currentHpを参照
+            if (action.user.currentHp <= 0) continue;
 
             if (action.command == CommandType.Attack)
             {
@@ -225,6 +289,14 @@ public class BattleManager : MonoBehaviour
                 if (action.targetEnemy.currentHp <= 0)
                 {
                     logText.text = $"{action.targetEnemy.monsterName} をたおした！";
+
+                    // 🌟 修正：敵が倒された時、画面上の対応する画像オブジェクトも消去する
+                    if (enemyGameObjects.ContainsKey(action.targetEnemy))
+                    {
+                        Destroy(enemyGameObjects[action.targetEnemy]);
+                        enemyGameObjects.Remove(action.targetEnemy);
+                    }
+
                     enemies.Remove(action.targetEnemy);
                     yield return new WaitForSeconds(1.2f);
 
@@ -267,7 +339,6 @@ public class BattleManager : MonoBehaviour
             int enemyDamage = 0;
             logText.text = BattleLogic.ExecuteEnemyAttack(activeEnemy, targetPlayer, isTargetDefending, out enemyDamage);
 
-            // 🌟 HPの減少をリアルタイムでステータスUIに反映
             if (statusWindow != null && targetPlayerIndex >= 0)
             {
                 statusWindow.UpdatePlayerUI(targetPlayerIndex, targetPlayer.currentHp, targetPlayer.hp, targetPlayer.currentMp, targetPlayer.mp);
@@ -279,7 +350,6 @@ public class BattleManager : MonoBehaviour
                 logText.text = $"{targetPlayer.monsterName} は倒れてしまった！";
                 players.Remove(targetPlayer);
 
-                // プレイヤー死亡時にUIを一度リフレッシュ（またはグレーアウト処理など。ここでは一括再描画クリア）
                 if (statusWindow != null) statusWindow.CreateStatusWindow(players, 50f, 50f);
 
                 yield return new WaitForSeconds(1.2f);
