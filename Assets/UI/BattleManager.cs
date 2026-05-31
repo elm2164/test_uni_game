@@ -92,23 +92,43 @@ public class BattleManager : MonoBehaviour
 
             if (rect != null)
             {
-                rect.anchorMin = new Vector2(0.5f, 0.5f);
-                rect.anchorMax = new Vector2(0.5f, 0.5f);
-                rect.pivot = new Vector2(0.5f, 0.5f);
+                // 🌟 アンカーを「下・中央（bottom - center）」に変更
+                rect.anchorMin = new Vector2(0.5f, 0f);
+                rect.anchorMax = new Vector2(0.5f, 0f);
+
+                // 🌟 ピボットも「下・中央（軸の足元）」に変更
+                rect.pivot = new Vector2(0.5f, 0f);
 
                 float posX = startX + (i * enemyStepX);
+
+                // 🌟 下端からの立ち上がり高さとして配置（インスペクターの enemyCenterY で足元の高さを調整可能に）
+                // ※値はインスペクター上で 300 や 400 など、砂地のラインに合わせて調整してください。
                 rect.anchoredPosition = new Vector2(posX, enemyCenterY);
             }
 
-            Debug.Log($"敵 '{enemy.monsterName}' の画像を読み込むための spriteName: '{enemy.spriteName}'"); // 🌟 デバッグログで確認
-            // 🌟 4桁ルールに対応したスマート読み込みロジック
             if (img != null)
             {
-                // コンストラクタ側で必ず有効な4桁文字列が入っていることが保証されているため、そのまま渡すだけ
                 Sprite loadedSprite = Resources.Load<Sprite>($"Images/Monster/{enemy.spriteName}");
                 if (loadedSprite != null)
                 {
                     img.sprite = loadedSprite;
+
+                    // 🛑 先ほど追加した preserveAspect や AspectRatioFitter の記述はすべて削除（あるいはオフ）にします
+                    img.preserveAspect = false;
+
+                    // 🌟 1. 画像が本来持っている「等倍ピクセルサイズ」にオブジェクトの大きさを一発で強制変更する
+                    img.SetNativeSize();
+
+                    // 🌟 2. 812pxのままだと画面に対して大きすぎるので、
+                    // RectTransformのローカルスケール（Scale）を使って、全体の比率を綺麗に保ったまま縮小調整する
+                    RectTransform imgRect = enemyGo.GetComponent<RectTransform>();
+                    if (imgRect != null)
+                    {
+                        // 例として「0.3f」にすると、本来のアス比を完全に保ったまま、元の大きさの30%のサイズ感になります
+                        // 画面内のバランス（スライムとの対比）を見て、0.25f や 0.35f など自由に調整してください
+                        float targetScale = 0.3f;
+                        imgRect.localScale = new Vector3(targetScale, targetScale, 1f);
+                    }
                 }
                 else
                 {
@@ -267,6 +287,29 @@ public class BattleManager : MonoBehaviour
         }
     }
 
+
+    // --- 追加：敵を点滅させるコルーチン演出 ---
+    private IEnumerator FlashEnemy(GameObject enemyGo)
+    {
+        if (enemyGo == null) yield break;
+
+        Image img = enemyGo.GetComponent<Image>();
+        if (img == null) yield break;
+
+        Color originalColor = img.color;
+        // 赤く点滅させたい場合は、flashColor = Color.red に変更してください
+        Color flashColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0f); // 透明に点滅
+
+        // 3回チカチカと点滅させる（0.1秒ごとに入れ替え）
+        for (int i = 0; i < 3; i++)
+        {
+            img.color = flashColor;
+            yield return new WaitForSeconds(0.1f);
+            img.color = originalColor;
+            yield return new WaitForSeconds(0.1f);
+        }
+    }
+
     IEnumerator ExecuteTurnRoutine()
     {
         // --- 1. 味方の行動処理 ---
@@ -284,13 +327,19 @@ public class BattleManager : MonoBehaviour
 
                 int damage = 0;
                 logText.text = BattleLogic.ExecutePlayerAttack(action, out damage);
+
+                // 🌟 追加：攻撃対象の敵オブジェクトを取得して、ダメージと同時に点滅させる！
+                if (enemyGameObjects.TryGetValue(action.targetEnemy, out GameObject targetGo))
+                {
+                    StartCoroutine(FlashEnemy(targetGo));
+                }
+
                 yield return new WaitForSeconds(1.5f);
 
                 if (action.targetEnemy.currentHp <= 0)
                 {
                     logText.text = $"{action.targetEnemy.monsterName} をたおした！";
 
-                    // 🌟 修正：敵が倒された時、画面上の対応する画像オブジェクトも消去する
                     if (enemyGameObjects.ContainsKey(action.targetEnemy))
                     {
                         Destroy(enemyGameObjects[action.targetEnemy]);
@@ -341,6 +390,9 @@ public class BattleManager : MonoBehaviour
 
             if (statusWindow != null && targetPlayerIndex >= 0)
             {
+                // 🌟 追加：数値を更新する直前のタイミングで、ステータスパネルをチカチカと点滅させる！
+                statusWindow.FlashPlayerPanel(targetPlayerIndex);
+
                 statusWindow.UpdatePlayerUI(targetPlayerIndex, targetPlayer.currentHp, targetPlayer.hp, targetPlayer.currentMp, targetPlayer.mp);
             }
             yield return new WaitForSeconds(1.5f);

@@ -48,8 +48,8 @@ public static class Battle
       e2Master.monsterName = "スライムB";
       enemies.Add(new MonsterStatus(e2Master, 1));
 
-      MonsterData e3Master = baseMonster.MakeMonster();
-      e3Master.monsterName = "スライムC";
+      MonsterData base2Monster = masterData["ドラキー"];
+      MonsterData e3Master = base2Monster.MakeMonster();
       enemies.Add(new MonsterStatus(e3Master, 1));
     }
 

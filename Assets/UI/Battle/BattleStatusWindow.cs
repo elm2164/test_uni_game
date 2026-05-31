@@ -150,4 +150,38 @@ public class BattleStatusWindow : MonoBehaviour
     generatedPanels.Clear();
     playerStatusTexts.Clear();
   }
+
+  // 🌟 追加：指定されたプレイヤーのステータスパネルを点滅させる
+  public void FlashPlayerPanel(int playerIndex)
+  {
+    // インデックスが範囲内かつ、該当パネルが実在するか安全チェック
+    if (playerIndex < 0 || playerIndex >= generatedPanels.Count) return;
+    GameObject panelGo = generatedPanels[playerIndex];
+    if (panelGo == null) return;
+
+    // パネルについているImageコンポーネントを取得
+    UnityEngine.UI.Image img = panelGo.GetComponent<UnityEngine.UI.Image>();
+    if (img != null)
+    {
+      // 既存のバトルマネージャーのコルーチンシステムを利用するか、
+      // このコンポーネント自身（MonoBehaviour）のコルーチンとして実行します
+      StartCoroutine(FlashPanelRoutine(img));
+    }
+  }
+
+  // 🌟 追加：点滅アニメーションの実体コルーチン
+  private System.Collections.IEnumerator FlashPanelRoutine(UnityEngine.UI.Image img)
+  {
+    Color originalColor = img.color;
+    // 赤っぽくフラッシュさせたい場合は、new Color(1f, 0f, 0f, originalColor.a) などにすると緊張感が出ます
+    Color flashColor = new Color(originalColor.r, originalColor.g, originalColor.b, 0f); // 今回は消える点補完
+
+    for (int i = 0; i < 3; i++)
+    {
+      img.color = flashColor;
+      yield return new WaitForSeconds(0.1f);
+      img.color = originalColor;
+      yield return new WaitForSeconds(0.1f);
+    }
+  }
 }
